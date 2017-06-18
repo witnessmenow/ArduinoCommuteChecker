@@ -1,14 +1,14 @@
 /*******************************************************************
- *  A project to light up leds fro the quickest route using        
- *  live traffic times from Google maps.                           
+ *  A project to light up leds fro the quickest route using
+ *  live traffic times from Google maps.
  *  Also has a 7 segment display to show travel time
- *  
+ *
  *  Main Hardware:
  *  - ESP8266 (I used a Wemos D1 Mini Clone)
  *  - PL9823 Addressable LEDS (Similar to Neopixels)
  *  - 4 digit 7 Segment display with a TM1637 driver
- *                                                                 
- *  Written by Brian Lough                                         
+ *
+ *  Written by Brian Lough
  *******************************************************************/
 
 // ----------------------------
@@ -25,7 +25,7 @@
 // ----------------------------
 
 #include <WiFiManager.h>
-// For configuring the Wifi credentials without re-programing 
+// For configuring the Wifi credentials without re-programing
 // Availalbe on library manager (WiFiManager)
 // https://github.com/tzapu/WiFiManager
 
@@ -82,6 +82,10 @@ struct Routes{
 const uint8_t LETTER_A = SEG_A | SEG_B | SEG_C | SEG_E | SEG_F | SEG_G;
 const uint8_t LETTER_B = SEG_C | SEG_D | SEG_E | SEG_F | SEG_G;
 const uint8_t LETTER_C = SEG_A | SEG_D | SEG_E | SEG_F;
+const uint8_t LETTER_D = SEG_B | SEG_C | SEG_D | SEG_E | SEG_G;
+const uint8_t LETTER_E = SEG_A | SEG_D | SEG_E | SEG_F | SEG_G;
+const uint8_t LETTER_F = SEG_A | SEG_E | SEG_F | SEG_G;
+
 const uint8_t LETTER_O = SEG_C | SEG_D | SEG_E | SEG_G;
 
 const uint8_t SEG_BOOT[] = {
@@ -95,18 +99,18 @@ const uint8_t SEG_BOOT[] = {
   LETTER_C,                                        // C
   LETTER_O,                                        // o
   SEG_C | SEG_E | SEG_G,                           // n
-  SEG_A | SEG_E | SEG_F | SEG_G                    // F
+  LETTER_F                                         // F
   };
 
   const uint8_t SEG_DONE[] = {
-  SEG_B | SEG_C | SEG_D | SEG_E | SEG_G,           // d
+  LETTER_D,                                        // d
   LETTER_O,                                        // o
   SEG_C | SEG_E | SEG_G,                           // n
-  SEG_A | SEG_D | SEG_E | SEG_F | SEG_G            // E
+  LETTER_E                                         // E
   };
 
   const uint8_t SEG_ERR[] = {
-  SEG_A | SEG_D | SEG_E | SEG_F | SEG_G,          // E
+  LETTER_E,                                       // E
   SEG_E | SEG_G,                                  // r
   SEG_E | SEG_G,                                  // r
   0
@@ -131,9 +135,13 @@ const uint8_t SEG_BOOT[] = {
 // Set between 0 and 255, 255 being the brigthest
 #define BRIGTHNESS 16
 
-// Server to get the time off
+// Server to get the time off (shouldn't need to change)
 // See here for a list: http://www.pool.ntp.org/en/
-const char timeServer[] = "ie.pool.ntp.org";
+const char timeServer[] = "pool.ntp.org";
+
+// Offset for setting the time
+// Get the value from https://epochconverter.com/timezones
+#define NTP_OFFSET 3600
 
 // If the travel time is longer than normal + MEDIUM_TRAFFIC_THRESHOLD, light the route ORANGE
 // Value is in seconds
@@ -170,14 +178,14 @@ void populateRoutes() {
   Serial.println("Populating Routes:");
 
   setRoute(0, "Tuam Road", "via:53.3003501,-9.0073709", routeALeds, 8, LETTER_A);
-  
+
   setRoute(1, "Castlegar sideroad", "via:53.2981156,-9.0287593", routeBLeds, 10, LETTER_B);
 
   setRoute(2, "Bypass", "via:53.2912109,-8.9988612", routeCLeds, 8, LETTER_C);
 }
 
 // You also may need to change the colours in the getRouteColour method.
-// The leds I used seemed to have the Red colour and Green colour swapped in comparison 
+// The leds I used seemed to have the Red colour and Green colour swapped in comparison
 // to the library's documentation.
 
 // ----------------------------
@@ -189,9 +197,9 @@ Routes routes[NUMBER_OF_ROUTES];
 TM1637Display display(CLK, DIO);
 
 WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP, timeServer, 3600, 60000);
+NTPClient timeClient(ntpUDP, timeServer, NTP_OFFSET, 60000);
 
-// Number of seconds after reset during which a 
+// Number of seconds after reset during which a
 // subseqent reset will be considered a double reset.
 #define DRD_TIMEOUT 10
 
@@ -238,7 +246,7 @@ void configModeCallback (WiFiManager *myWiFiManager) {
 void setup() {
 
   Serial.begin(115200);
-  
+
   display.setBrightness(0x0f);
   display.setSegments(SEG_BOOT);
 
@@ -359,10 +367,10 @@ void displayResponse(DirectionsResponse response) {
 
 void getTravelTimes(){
   for(int i=0; i < NUMBER_OF_ROUTES; i++) {
-  
+
     Serial.print("Getting data for route: ");
     Serial.println(routes[i].description);
-    
+
     inputOptions.waypoints = routes[i].waypoint;
     routes[i].response = directionsApi->directionsApi(origin, destination, inputOptions);
   }
@@ -409,7 +417,7 @@ void unLightAllLeds() {
 void displayTravelTime(int routeId) {
   uint8_t data[4];
   int travelInMinutes = routes[routeId].response.durationTraffic_value / 60;
-  
+
   data[0] = routes[routeId].label;
   data[1] = SEG_G;
   data[2] = display.encodeDigit(travelInMinutes / 10);
@@ -448,7 +456,7 @@ void displayTime() {
   int minutes = (epoch % 3600) / 60;
 
   uint8_t data[4];
-  
+
   if(hour < 10) {
     data[0] = display.encodeDigit(0);
     data[1] = display.encodeDigit(hour);
@@ -479,7 +487,7 @@ void loop() {
     // serialPrintTravelTimes();
     fastestRouteId = findFastestRoute();
     displayState = 0;
-    
+
     if(fastestRouteId >= 0) {
       displayTravelTime(fastestRouteId);
       lightRoute(fastestRouteId);
